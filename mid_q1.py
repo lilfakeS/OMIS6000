@@ -14,46 +14,59 @@ nutrient_content = pd.read_csv('https://raw.githubusercontent.com/lilfakeS/OMIS6
 nutrient_requirements = pd.read_csv('https://raw.githubusercontent.com/lilfakeS/OMIS6000/main/nutrient_requirements.csv')
 
 
+
 # Create a new model
-model = gp.Model("OptiDiet")
+m = gp.Model("OptiDiet")
 
 # Create decision variables
-x = model.addVars(food_categories.shape[0], vtype=gp.GRB.CONTINUOUS, name="x")
+x = m.addVars(120, vtype=gp.GRB.CONTINUOUS, name="x")
 
-# Set objective function
-model.setObjective(gp.quicksum(food_categories['Cost_per_gram'][i] * x[i] for i in range(food_categories.shape[0])), gp.GRB.MINIMIZE)
-
-# Add nutritional balance constraints
-for j in range(nutrient_requirements.shape[0]):
-    model.addConstr(gp.quicksum(nutrient_content.iloc[i, j+1] * x[i] for i in range(food_categories.shape[0])) >= nutrient_requirements.iloc[j, 1], f"min_nutrient_{j}")
-    model.addConstr(gp.quicksum(nutrient_content.iloc[i, j+1] * x[i] for i in range(food_categories.shape[0])) <= nutrient_requirements.iloc[j, 2], f"max_nutrient_{j}")
-
-# Add dietary preference constraints (Q3 answer)
-model.addConstr(gp.quicksum(food_categories['Is_Vegetarian'][i] * x[i] for i in range(food_categories.shape[0])) >= food_preferences['Veggie_grams'][0], "veggie_constraint")
-model.addConstr(gp.quicksum(food_categories['Is_Vegan'][i] * x[i] for i in range(food_categories.shape[0])) >= food_preferences['Vegan_grams'][0], "vegan_constraint")
-model.addConstr(gp.quicksum(food_categories['Is_Kosher'][i] * x[i] for i in range(food_categories.shape[0])) >= food_preferences['Kosher_grams'][0], "kosher_constraint")
-model.addConstr(gp.quicksum(food_categories['Is_Halal'][i] * x[i] for i in range(food_categories.shape[0])) >= food_preferences['Halal_grams'][0], "halal_constraint")
-model.addConstr(gp.quicksum(x[i] for i in range(food_categories.shape[0])) == food_preferences['All_grams'][0], "all_constraint")
+# Nutritional balance constraints
+for i in range(len(nutrient_requirements)):
+    nutrient = nutrient_requirements.iloc[i]['Nutrient']
+    min_req = nutrient_requirements.iloc[i]['Min_Requirement']
+    max_req = nutrient_requirements.iloc[i]['Max_Requirement']
+    m.addConstr(gp.quicksum(nutrient_content.iloc[j][nutrient] * x[j] for j in range(120)) >= min_req,
+                f"Min_{nutrient}")
+    m.addConstr(gp.quicksum(nutrient_content.iloc[j][nutrient] * x[j] for j in range(120)) <= max_req,
+                f"Max_{nutrient}")
 
 
-# Add variety constraints (Q4 answer)
-for i in range(food_categories.shape[0]):
-    model.addConstr(x[i] <= 0.03 * food_preferences['All_grams'][0], f"variety_constraint_{i}")
+# Dietary preference constraints
+for category in ['Veggie', 'Vegan', 'Kosher', 'Halal']:
+    m.addConstr(gp.quicksum(x[i] for i in range(120) if food_categories.iloc[i][f"Is_{category}"] == 1) >=
+                food_preferences.iloc[0][f"{category.lower()}_grams"], f"{category}_constraint")
 
-# Optimize the model
-model.optimize()
+# Variety constraints
+total_grams = food_preferences.iloc[0]['All_grams']
+for i in range(120):
+    m.addConstr(x[i] <= 0.03 * total_grams, f"Variety_{i}")
+
+# Objective function
+m.setObjective(gp.quicksum(food_categories.iloc[i]['Cost_per_gram'] * x[i] for i in range(120)), gp.GRB.MINIMIZE)
+
+# Solve the model
+m.optimize()
 
 # Print the optimal solution
-if model.status == gp.GRB.OPTIMAL:
-    print("Optimal solution found!")
-    for i in range(food_categories.shape[0]):
-        print(f"{food_categories['Food_Item'][i]}: {x[i].x} grams")
-    print(f"Total cost: ${model.objVal:.2f}")
-else:
-    print("No optimal solution found.")
+print(f"Optimal cost: {m.objVal:.2f}")
 
+# Proportion of Halal and Kosher foods
+halal_kosher_grams = sum(x[i].x for i in range(120) if food_categories.iloc[i]['Is_Halal'] == 1 or food_categories.iloc[i]['Is_Kosher'] == 1)
+total_grams = sum(x[i].x for i in range(120))
+print(f"Proportion of Halal and Kosher foods: {halal_kosher_grams / total_grams:.2f}")
 
-# 1
-x = model.addVars(food_categories.shape[0], vtype=gp.GRB.CONTINUOUS, name="x")
-print(x)
+# Omit variety constraints and resolve
+m.remove(m.getConstrs())
+m.optimize()
+print(f"Optimal cost without variety constraints: {m.objVal:.2f}")
+print(f"Number of non-zero variables without variety constraints: {len([v for v in m.getVars() if v.x > 0])}")
 
+# Increase dietary preference constraints by 10,000 grams
+for category in ['Veggie', 'Vegan', 'Kosher', 'Halal', 'All']:
+    m.getConstrByName(f"{category}_constraint").RHS += 10000
+m.optimize()
+print(f"Optimal cost with increased dietary preferences: {m.objVal:.2f}")
+
+# Reduced cost for Food_1
+print(f"Reduced cost for Food_1: {m.getVarByName('x[0]').RC:.2f}")
