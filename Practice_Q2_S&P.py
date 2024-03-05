@@ -6,7 +6,7 @@ from gurobipy import GRB
 import gurobipy as gb
 import pandas as pd
 
-df = pd.read_csv(r"C:\Users\chiha\OneDrive - York University\Operational Research\Practice Questions\sp500_data.csv")
+df = pd.read_csv('https://raw.githubusercontent.com/lilfakeS/OMIS6000/main/sp500_data.csv')
 
 # Instantiate our optimization problem in
 model = gb.Model("S&P investment")

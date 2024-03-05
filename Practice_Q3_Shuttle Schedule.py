@@ -6,7 +6,7 @@ import pandas as pd
 from gurobipy import GRB
 import gurobipy as gb
 
-route = pd.read_csv(r"C:\Users\chiha\OneDrive - York University\Operational Research\Practice Questions\Routes.csv")
+route = pd.read_csv(r"https://raw.githubusercontent.com/lilfakeS/OMIS6000/main/Routes.csv")
 
 # Create the optimization model
 model = gb.Model("Shuttle Service")

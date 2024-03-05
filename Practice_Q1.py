@@ -55,3 +55,7 @@ print("Total Transportation cost: ", model.objVal)
 
 # Print the decision variables
 print(model.printAttr('X'))
+
+# Print shadow prices for all constraints
+for constr in m.getConstrs():
+    print(f"Shadow price for constraint {constr.ConstrName}: {constr.Pi}")
